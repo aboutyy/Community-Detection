@@ -1,0 +1,5 @@
+{
+  "name": "Copy of 网络社区检测交互可视化",
+  "description": "An interactive web application for demonstrating and visualizing classic community detection algorithms on complex networks, powered by Gemini.",
+  "requestFramePermissions": []
+}
