@@ -25,9 +25,9 @@ export interface GraphData {
 }
 
 export enum Algorithm {
-  LOUVAIN = 'Louvain Method',
-  GIRVAN_NEWMAN = 'Girvan-Newman Algorithm',
-  LABEL_PROPAGATION = 'Label Propagation Algorithm',
+  LOUVAIN = 'Louvain 算法',
+  GIRVAN_NEWMAN = 'Girvan-Newman 算法',
+  LABEL_PROPAGATION = '标签传播算法',
 }
 
 export interface CommunityAssignment {
@@ -76,4 +76,13 @@ export interface LouvainParams {
 
 export interface GirvanNewmanParams {
     targetCommunities: number;
+}
+
+export interface RunHistoryEntry {
+  id: string;
+  networkName: string;
+  algorithm: Algorithm;
+  params: string;
+  performance: PerformanceResult | null;
+  graphData: GraphData;
 }

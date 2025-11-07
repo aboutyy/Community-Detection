@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef } from 'react';
 import ControlPanel from './components/ControlPanel';
 import GraphVisualizer from './components/GraphVisualizer';
 import { getAlgorithmExplanation, runCommunityDetection } from './services/geminiService';
-import { GraphData, Algorithm, Node, Link, CommunityAssignment, PerformanceResult, GNParams, LFRParams, LouvainParams, GirvanNewmanParams } from './types';
+import { GraphData, Algorithm, Node, Link, CommunityAssignment, PerformanceResult, GNParams, LFRParams, LouvainParams, GirvanNewmanParams, RunHistoryEntry } from './types';
 import { calculateNMI } from './utils/performance';
 import { generateGNNetwork, generateLFRNetwork } from './utils/networkGenerators';
 import VisualizationControls from './components/VisualizationControls';
@@ -46,6 +46,8 @@ function App() {
   const [showNodeLabels, setShowNodeLabels] = useState<boolean>(true);
   const [groupCommunities, setGroupCommunities] = useState<boolean>(true);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  const [currentNetworkName, setCurrentNetworkName] = useState<string>('无网络');
+  const [runHistory, setRunHistory] = useState<RunHistoryEntry[]>([]);
   
   const abortControllerRef = useRef<AbortController | null>(null);
   
@@ -85,12 +87,13 @@ function App() {
     try {
         const network = BENCHMARK_NETWORKS.find(n => n.id === benchmarkId);
         if (!network) {
-            throw new Error(`Benchmark network "${benchmarkId}" not found.`);
+            throw new Error(`未找到基准网络 "${benchmarkId}"`);
         }
 
-        const { edgeList, groundTruth: newGroundTruth, nodeDetails } = network;
+        const { edgeList, groundTruth: newGroundTruth, nodeDetails, name } = network;
         const parsedData = parseEdgeList(edgeList);
         setCustomData(edgeList);
+        setCurrentNetworkName(name);
 
         // Immediately add ground truth community data to nodes for visualization
         const groundTruthMap = new Map<string, number>();
@@ -108,7 +111,7 @@ function App() {
         setGroundTruth(newGroundTruth);
         clearResults();
     } catch (e: any) {
-        setError(e.message || "Failed to load benchmark network.");
+        setError(e.message || "加载基准网络失败。");
         console.error(e);
     }
   }, []);
@@ -116,11 +119,12 @@ function App() {
   const handleParseCustomData = useCallback(() => {
     const parsedData = parseEdgeList(customData);
     if(parsedData.nodes.length === 0) {
-      setError("Invalid or empty data. Please provide an edge list (e.g., 'node1 node2').");
+      setError("数据无效或为空。请输入边列表格式的数据 (例如 '节点1 节点2')。");
       return;
     }
     setGraphData(parsedData);
     setGroundTruth(null); // Custom data has no ground truth
+    setCurrentNetworkName('自定义网络');
     clearResults();
   }, [customData]);
   
@@ -128,8 +132,10 @@ function App() {
     let result;
     if (type === 'gn') {
       result = generateGNNetwork(gnParams);
+      setCurrentNetworkName('生成的 GN 网络');
     } else {
       result = generateLFRNetwork(lfrParams);
+      setCurrentNetworkName('生成的 LFR 网络');
     }
     
     // The generator now returns graphData with communities included
@@ -142,7 +148,7 @@ function App() {
 
   const handleRunDetection = async () => {
     if (graphData.nodes.length === 0) {
-      setError("No graph data loaded. Please load data before running detection.");
+      setError("没有加载图数据。请先加载数据再运行检测。");
       return;
     }
     
@@ -150,9 +156,8 @@ function App() {
     const { signal } = abortControllerRef.current;
 
     setIsLoading(true);
-    setError(null);
-    setExplanation('');
-    setPerformance(null);
+    let newPerformance: PerformanceResult | null = null;
+    clearResults();
 
     // Reset communities and misclassified status before detection, but keep other details
     const initialGraphData = {
@@ -164,18 +169,21 @@ function App() {
     try {
       // --- Step 1: Run community detection using the Gemini API ---
       let params = {};
+      let paramsString = '默认参数';
       switch(selectedAlgorithm) {
         case Algorithm.LOUVAIN:
           params = louvainParams;
+          paramsString = `分辨率: ${louvainParams.resolution.toFixed(2)}`;
           break;
         case Algorithm.GIRVAN_NEWMAN:
           params = girvanNewmanParams;
+          paramsString = `目标社群数: ${girvanNewmanParams.targetCommunities}`;
           break;
         case Algorithm.LABEL_PROPAGATION:
           // LPA has no user-configurable parameters in this implementation
           break;
         default:
-          throw new Error(`Algorithm "${selectedAlgorithm}" is not supported.`);
+          throw new Error(`算法 "${selectedAlgorithm}" 不支持。`);
       }
 
       const communities = await runCommunityDetection(initialGraphData, selectedAlgorithm, params, signal);
@@ -196,13 +204,25 @@ function App() {
           isMisclassified: isMisclassified,
         };
       });
-
-      setGraphData({ ...initialGraphData, nodes: updatedNodes });
+      
+      const finalGraphData = { ...initialGraphData, nodes: updatedNodes };
+      setGraphData(finalGraphData);
       
       if (groundTruth && groundTruth.length > 0) {
         const nmi = calculateNMI(groundTruth, communities, initialGraphData.nodes);
-        setPerformance({ nmi });
+        newPerformance = { nmi };
+        setPerformance(newPerformance);
       }
+
+      const newHistoryEntry: RunHistoryEntry = {
+        id: Date.now().toString(),
+        networkName: currentNetworkName,
+        algorithm: selectedAlgorithm,
+        params: paramsString,
+        performance: newPerformance,
+        graphData: finalGraphData,
+      };
+      setRunHistory(prev => [newHistoryEntry, ...prev.slice(0, 19)]); // Keep max 20 entries
 
       // --- Step 2: Asynchronously fetch the explanation from Gemini ---
       try {
@@ -213,18 +233,18 @@ function App() {
         if (explanationError instanceof DOMException && explanationError.name === 'AbortError') {
             // This is expected if the user cancels
         } else {
-            console.error("Failed to fetch explanation, but communities were calculated.", explanationError);
-            setExplanation("Community detection was successful, but failed to load the explanation from the AI.");
+            console.error("无法获取解释，但社区已计算完成。", explanationError);
+            setExplanation("社区发现成功，但从AI加载算法解释失败。");
         }
       }
 
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') {
-        setError("Detection was cancelled.");
+        setError("检测已被取消。");
       } else if (err instanceof Error) {
         setError(err.message);
       } else {
-        setError("An unknown error occurred during detection.");
+        setError("检测过程中发生未知错误。");
       }
     } finally {
       setIsLoading(false);
@@ -237,6 +257,21 @@ function App() {
         abortControllerRef.current.abort();
     }
   }, []);
+
+  const handleLoadFromHistory = (entryId: string) => {
+    const entry = runHistory.find(e => e.id === entryId);
+    if (entry) {
+        setGraphData(entry.graphData);
+        clearResults();
+        setError(`已从历史记录加载: ${entry.networkName} - ${entry.algorithm}`);
+        setTimeout(() => setError(null), 3000); // Temporary message
+    }
+  };
+
+  const handleDeleteHistoryEntry = (entryId: string) => {
+      setRunHistory(prev => prev.filter(e => e.id !== entryId));
+  };
+
 
   const handleNodeClick = (node: Node) => {
     if (node.description || node.imageUrl) {
@@ -252,7 +287,7 @@ function App() {
   return (
     <div className="flex flex-col md:flex-row h-screen w-screen p-4 gap-4">
       <header className="md:hidden p-2">
-          <h1 className="text-2xl font-bold text-center text-cyan-300">Community Detection Visualizer</h1>
+          <h1 className="text-2xl font-bold text-center text-cyan-300">社区发现可视化工具</h1>
       </header>
       <aside className="w-full md:w-1/3 lg:w-1/4 h-auto md:h-full flex-shrink-0">
         <ControlPanel
@@ -278,11 +313,14 @@ function App() {
           setGirvanNewmanParams={setGirvanNewmanParams}
           onGenerate={handleGenerateNetwork}
           benchmarkNetworks={benchmarkNetworkInfo}
+          runHistory={runHistory}
+          onLoadFromHistory={handleLoadFromHistory}
+          onDeleteHistoryEntry={handleDeleteHistoryEntry}
         />
       </aside>
       <main className="w-full md:w-2/3 lg:w-3/4 h-1/2 md:h-full min-h-0 bg-gray-800 rounded-lg shadow-lg flex flex-col">
         <div className="p-4 border-b border-gray-700 hidden md:flex justify-between items-center flex-wrap gap-2">
-            <h1 className="text-2xl font-bold text-cyan-300">Graph Visualization</h1>
+            <h1 className="text-2xl font-bold text-cyan-300">网络可视化</h1>
             <VisualizationControls 
               scaleNodeSizeByDegree={scaleNodeSizeByDegree}
               setScaleNodeSizeByDegree={setScaleNodeSizeByDegree}
@@ -303,7 +341,7 @@ function App() {
             />
           ) : (
             <div className="flex items-center justify-center h-full text-gray-500">
-                <p>Load or generate graph data to begin.</p>
+                <p>加载或生成图数据以开始。</p>
             </div>
           )}
         </div>

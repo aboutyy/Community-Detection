@@ -227,11 +227,11 @@ const GraphVisualizer: React.FC<GraphVisualizerProps> = ({ graphData, scaleNodeS
         d.fx = null;
         d.fy = null;
       }
-      // Fix: Specify the correct generic types for d3.drag to resolve the error.
-      // The first argument is the DOM element type being dragged (SVGGElement), the
-      // second is the datum type (NodeType), and the third is the subject type, which
-      // must match the event handlers.
-      return d3.drag<SVGGElement, NodeType, NodeType>()
+      // Fix: Resolve "Untyped function calls may not accept type arguments" error.
+      // The d3.drag function is not being correctly inferred as a generic function.
+      // Calling it without type arguments and casting the result provides the necessary
+      // type information for the drag event handlers.
+      return (d3.drag() as d3.DragBehavior<SVGGElement, NodeType, NodeType>)
         .on("start", dragstarted)
         .on("drag", dragged)
         .on("end", dragended);

@@ -20,7 +20,7 @@ const VisualizationControls: React.FC<VisualizationControlsProps> = ({
   return (
     <div className="flex items-center space-x-6">
       <label htmlFor="node-size-toggle" className="flex items-center cursor-pointer">
-        <span className="text-sm font-medium text-gray-300 mr-3">Scale Nodes by Degree</span>
+        <span className="text-sm font-medium text-gray-300 mr-3">节点大小按度缩放</span>
         <div className="relative">
           <input
             type="checkbox"
@@ -34,7 +34,7 @@ const VisualizationControls: React.FC<VisualizationControlsProps> = ({
         </div>
       </label>
       <label htmlFor="node-label-toggle" className="flex items-center cursor-pointer">
-        <span className="text-sm font-medium text-gray-300 mr-3">Show Node Labels</span>
+        <span className="text-sm font-medium text-gray-300 mr-3">显示节点标签</span>
         <div className="relative">
           <input
             type="checkbox"
@@ -48,7 +48,7 @@ const VisualizationControls: React.FC<VisualizationControlsProps> = ({
         </div>
       </label>
       <label htmlFor="group-communities-toggle" className="flex items-center cursor-pointer">
-        <span className="text-sm font-medium text-gray-300 mr-3">Group Communities</span>
+        <span className="text-sm font-medium text-gray-300 mr-3">社区聚合展示</span>
         <div className="relative">
           <input
             type="checkbox"

@@ -3,7 +3,7 @@ import { BenchmarkNetwork } from '../types';
 export const BENCHMARK_NETWORKS: BenchmarkNetwork[] = [
     {
         id: 'karate',
-        name: "Zachary's Karate Club",
+        name: "扎卡里的空手道俱乐部",
         edgeList: `1 2
 1 3
 1 4
@@ -97,13 +97,13 @@ export const BENCHMARK_NETWORKS: BenchmarkNetwork[] = [
             { node: '33', community: 1 }, { node: '34', community: 1 }
         ],
         nodeDetails: {
-            '1': { description: 'Mr. Hi (Instructor)' },
-            '34': { description: 'John A. (Officer)' }
+            '1': { description: '“Hi先生” (教练)' },
+            '34': { description: '约翰 A. (会长)' }
         }
     },
     {
         id: 'lesmis',
-        name: "Les Misérables Characters",
+        name: "悲惨世界人物关系",
         edgeList: `Napoleon Valjean
 Myriel Napoleon
 Mlle.Baptistine Valjean
@@ -224,7 +224,7 @@ Javert Marius`,
     },
     {
         id: 'santafe',
-        name: "SFI Collaboration Network",
+        name: "SFI 合作网络",
         edgeList: `1 2
 1 3
 1 4

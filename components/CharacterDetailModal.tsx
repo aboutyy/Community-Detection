@@ -41,7 +41,7 @@ const CharacterDetailModal: React.FC<CharacterDetailModalProps> = ({ node, onClo
         <button
           onClick={onClose}
           className="absolute top-3 right-3 text-gray-400 hover:text-white transition-colors"
-          aria-label="Close"
+          aria-label="关闭"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -77,7 +77,7 @@ const CharacterDetailModal: React.FC<CharacterDetailModalProps> = ({ node, onClo
           <h2 className="text-3xl font-bold text-cyan-400 mb-2">{node.id}</h2>
           {node.community !== undefined && (
             <p className="text-md text-gray-300 mb-4 bg-gray-700/50 px-3 py-1 rounded-full">
-                Community: <span className="font-bold">{node.community}</span>
+                社区: <span className="font-bold">{node.community}</span>
             </p>
           )}
           {node.description && (
