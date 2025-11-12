@@ -5,15 +5,46 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Interactive Community Detection Visualizer</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+      }
+    </script>
     <style>
       body {
         overscroll-behavior: none;
+      }
+      /* Tooltip Arrow Styling */
+      #graph-tooltip::after {
+        content: '';
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        border-width: 6px;
+        border-style: solid;
+      }
+
+      /* Default position: above the node, arrow pointing down */
+      #graph-tooltip:not(.tooltip-bottom)::after {
+        top: 100%;
+        border-color: #111827 transparent transparent transparent; /* Corresponds to bg-gray-900 */
+      }
+      .dark #graph-tooltip:not(.tooltip-bottom)::after {
+         border-color: black transparent transparent transparent;
+      }
+
+      /* Bottom position: below the node, arrow pointing up */
+      #graph-tooltip.tooltip-bottom::after {
+        bottom: 100%;
+        border-color: transparent transparent #111827 transparent;
+      }
+      .dark #graph-tooltip.tooltip-bottom::after {
+         border-color: transparent transparent black transparent;
       }
     </style>
   <script type="importmap">
 {
   "imports": {
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.28.0",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
     "react": "https://aistudiocdn.com/react@^19.2.0",
     "react/": "https://aistudiocdn.com/react@^19.2.0/",
@@ -22,8 +53,8 @@
 }
 </script>
 </head>
-  <body class="bg-gray-900 text-gray-100">
-    <div id="root"></div>
+  <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 flex flex-col h-screen">
+    <div id="root" class="flex flex-col flex-grow h-full"></div>
     <script type="module" src="./index.tsx"></script>
   </body>
 </html>

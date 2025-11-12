@@ -20,7 +20,7 @@ const Slider: React.FC<{
   unit?: string;
 }> = ({ label, value, min, max, step, onChange, unit }) => (
   <div>
-    <label className="flex justify-between text-sm font-medium text-gray-300 mb-1">
+    <label className="flex justify-between text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">
       <span>{label}</span>
       <span>{step < 1 ? value.toFixed(2) : value}{unit}</span>
     </label>
@@ -31,7 +31,7 @@ const Slider: React.FC<{
       step={step}
       value={value}
       onChange={(e) => onChange(parseFloat(e.target.value))}
-      className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+      className="w-full h-2 bg-gray-300 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer"
     />
   </div>
 );
@@ -48,11 +48,11 @@ const SyntheticGeneratorControls: React.FC<SyntheticGeneratorControlsProps> = ({
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-center rounded-md bg-gray-900/50 p-1">
+      <div className="flex justify-center rounded-md bg-gray-200 dark:bg-gray-900/50 p-1">
         <button
           onClick={() => setGeneratorType('gn')}
           className={`px-4 py-1 text-sm font-semibold rounded-md transition-colors w-1/2 ${
-            generatorType === 'gn' ? 'bg-cyan-600 text-white' : 'text-gray-300 hover:bg-gray-700'
+            generatorType === 'gn' ? 'bg-cyan-600 text-white' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700'
           }`}
         >
           GN 模型
@@ -60,7 +60,7 @@ const SyntheticGeneratorControls: React.FC<SyntheticGeneratorControlsProps> = ({
         <button
           onClick={() => setGeneratorType('lfr')}
           className={`px-4 py-1 text-sm font-semibold rounded-md transition-colors w-1/2 ${
-            generatorType === 'lfr' ? 'bg-cyan-600 text-white' : 'text-gray-300 hover:bg-gray-700'
+            generatorType === 'lfr' ? 'bg-cyan-600 text-white' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700'
           }`}
         >
           LFR 基准
@@ -68,8 +68,8 @@ const SyntheticGeneratorControls: React.FC<SyntheticGeneratorControlsProps> = ({
       </div>
       
       {generatorType === 'gn' && (
-        <div className="space-y-4 p-4 bg-gray-900/50 rounded-lg">
-          <h4 className="font-semibold text-gray-200">Girvan-Newman (GN) 参数</h4>
+        <div className="space-y-4 p-4 bg-gray-100 dark:bg-gray-900/50 rounded-lg">
+          <h4 className="font-semibold text-gray-800 dark:text-gray-200">Girvan-Newman (GN) 参数</h4>
           <Slider label="社区数量" value={gnParams.numCommunities} min={2} max={10} step={1} onChange={(v) => setGnParams({ ...gnParams, numCommunities: v })} />
           <Slider label="每社区节点数" value={gnParams.nodesPerCommunity} min={10} max={50} step={1} onChange={(v) => setGnParams({ ...gnParams, nodesPerCommunity: v })} />
           <Slider label="社区内连接概率 (p_in)" value={gnParams.p_in} min={0} max={1} step={0.01} onChange={(v) => setGnParams({ ...gnParams, p_in: v })} />
@@ -78,9 +78,9 @@ const SyntheticGeneratorControls: React.FC<SyntheticGeneratorControlsProps> = ({
       )}
 
       {generatorType === 'lfr' && (
-        <div className="space-y-4 p-4 bg-gray-900/50 rounded-lg">
-          <h4 className="font-semibold text-gray-200">LFR 基准网络参数</h4>
-          <p className="text-xs text-gray-400 -mt-2 mb-2">生成具有幂律度分布和社区规模分布的网络。</p>
+        <div className="space-y-4 p-4 bg-gray-100 dark:bg-gray-900/50 rounded-lg">
+          <h4 className="font-semibold text-gray-800 dark:text-gray-200">LFR 基准网络参数</h4>
+          <p className="text-xs text-gray-500 dark:text-gray-400 -mt-2 mb-2">生成具有幂律度分布和社区规模分布的网络。</p>
           <Slider label="节点总数" value={lfrParams.n} min={50} max={500} step={10} onChange={(v) => setLfrParams({ ...lfrParams, n: v })} />
           <Slider label="混合参数 (μ)" value={lfrParams.mu} min={0.05} max={0.8} step={0.01} onChange={(v) => setLfrParams({ ...lfrParams, mu: v })} />
           <Slider label="最小度" value={lfrParams.minDegree} min={1} max={10} step={1} onChange={(v) => setLfrParams({ ...lfrParams, minDegree: v })} />
