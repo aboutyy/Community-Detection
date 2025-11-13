@@ -25,7 +25,7 @@ class Graph {
 
         this.adj = new Map();
         this.degrees = new Map();
-        this.m = this.edges.length;
+        this.m = 0; // Total weight of edges (1 for each link in unweighted graph)
 
         for (const node of this.nodes) {
             this.adj.set(node, []);
@@ -35,29 +35,43 @@ class Graph {
         for (const edge of this.edges) {
             if (this.nodes.has(edge.source) && this.nodes.has(edge.target)) {
                 this.adj.get(edge.source).push(edge.target);
-                this.adj.get(edge.target).push(edge.source);
                 this.degrees.set(edge.source, this.degrees.get(edge.source) + 1);
-                this.degrees.set(edge.target, this.degrees.get(edge.target) + 1);
+                
+                // For undirected graphs, add reverse edge and degree
+                if (edge.source !== edge.target) {
+                    this.adj.get(edge.target).push(edge.source);
+                    this.degrees.set(edge.target, this.degrees.get(edge.target) + 1);
+                }
+                this.m++;
             }
         }
     }
 }
 
+const shuffle = (array) => {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+};
+
 // 1. Label Propagation Algorithm
 const runLabelPropagation = (graph) => {
-    const nodeIds = Array.from(graph.nodes).sort();
     let communities = new Map(); // node -> community label
-    nodeIds.forEach(node => communities.set(node, node));
+    Array.from(graph.nodes).forEach(node => communities.set(node, node));
 
     let changed = true;
     let iterations = 0;
-    const maxIterations = 20;
+    const maxIterations = 30;
 
     while (changed && iterations < maxIterations) {
         changed = false;
         iterations++;
         
-        for (const node of nodeIds) {
+        const shuffledNodes = shuffle(Array.from(graph.nodes));
+
+        for (const node of shuffledNodes) {
             const neighbors = graph.adj.get(node) || [];
             if (neighbors.length === 0) continue;
 
@@ -78,7 +92,7 @@ const runLabelPropagation = (graph) => {
                 }
             }
             
-            const newCommunity = bestLabels.sort()[0];
+            const newCommunity = bestLabels[Math.floor(Math.random() * bestLabels.length)];
 
             if (communities.get(node) !== newCommunity) {
                 communities.set(node, newCommunity);
@@ -105,7 +119,7 @@ const runLouvain = (graph, params) => {
     }
 
     class Partition {
-        constructor(nodes, adj, degrees, m) {
+        constructor(nodes, degrees, m) {
             this.nodeToCommunity = new Map();
             this.communities = new Map();
             this.sigma_tot = new Map();
@@ -195,32 +209,30 @@ const runLouvain = (graph, params) => {
         const communityIds = Array.from(partition.communities.keys());
         const newNodes = communityIds.map(id => ({ id: id.toString() }));
         const newLinks = [];
-        
         const communityWeights = new Map();
+
         for (const edge of graph.edges) {
             const comm1 = partition.nodeToCommunity.get(edge.source);
             const comm2 = partition.nodeToCommunity.get(edge.target);
-            
-            if (comm1 !== comm2) {
-                const newComm1 = comm1.toString();
-                const newComm2 = comm2.toString();
-                const key = newComm1 < newComm2 ? \`\${newComm1}|\${newComm2}\` : \`\${newComm2}|\${newComm1}\`;
-                communityWeights.set(key, (communityWeights.get(key) || 0) + 1);
-            }
+            const comm1Str = comm1.toString();
+            const comm2Str = comm2.toString();
+
+            const key = comm1 <= comm2 ? \`\${comm1Str}|\${comm2Str}\` : \`\${comm2Str}|\${comm1Str}\`;
+            communityWeights.set(key, (communityWeights.get(key) || 0) + 1);
         }
-        
-        for(const [key, weight] of communityWeights.entries()) {
+
+        for (const [key, weight] of communityWeights.entries()) {
             const [source, target] = key.split('|');
-             for(let i = 0; i < weight; i++) {
+            for (let i = 0; i < weight; i++) {
                 newLinks.push({ source, target });
-             }
+            }
         }
         
         return { nodes: newNodes, links: newLinks };
     };
     
     let communityHierarchy = [];
-    let currentPartition = new Partition(graph.nodes, graph.adj, graph.degrees, graph.m);
+    let currentPartition = new Partition(graph.nodes, graph.degrees, graph.m);
     
     while (true) {
         optimizeModularity(currentPartition);
@@ -237,24 +249,24 @@ const runLouvain = (graph, params) => {
         }
 
         graph = new Graph(newGraphData);
-        currentPartition = new Partition(graph.nodes, graph.adj, graph.degrees, graph.m);
+        currentPartition = new Partition(graph.nodes, graph.degrees, graph.m);
     }
     
-    let finalPartition = new Map();
-    const originalNodes = Array.from(new Set(communityHierarchy[0].keys()));
-    originalNodes.forEach(node => finalPartition.set(node, communityHierarchy[0].get(node)));
+    // --- Map communities back to original nodes (Robust Implementation) ---
+    const finalPartition = new Map();
+    const originalNodes = Array.from(communityHierarchy[0].keys());
 
-    for (let level = 1; level < communityHierarchy.length; level++) {
-        const levelPartition = communityHierarchy[level];
-        const newFinalPartition = new Map();
-        for (const [node, community] of finalPartition.entries()) {
-            const mappedComm = levelPartition.get(community.toString());
-            if (mappedComm !== undefined) {
-                 newFinalPartition.set(node, mappedComm);
+    originalNodes.forEach(node => {
+        let currentCommunity = communityHierarchy[0].get(node);
+        for (let level = 1; level < communityHierarchy.length; level++) {
+            const nextLevelCommunity = communityHierarchy[level].get(String(currentCommunity));
+            if (nextLevelCommunity === undefined) {
+                break; // This community was not aggregated further.
             }
+            currentCommunity = nextLevelCommunity;
         }
-        finalPartition = newFinalPartition;
-    }
+        finalPartition.set(node, currentCommunity);
+    });
     
     const uniqueLabels = [...new Set(finalPartition.values())].sort((a,b)=>a-b);
     const labelMap = new Map(uniqueLabels.map((label, i) => [label, i]));
@@ -269,12 +281,14 @@ const runLouvain = (graph, params) => {
 // 3. Girvan-Newman Algorithm
 const runGirvanNewman = (graph, params) => {
     const { targetCommunities } = params;
-    const currentEdges = new Set(graph.edges.map(e => e.source < e.target ? \`\${e.source}|\${e.target}\` : \`\${e.target}|\${e.source}\`));
+    
     const tempAdj = new Map();
     graph.nodes.forEach(n => tempAdj.set(n, new Set()));
     graph.edges.forEach(e => {
         tempAdj.get(e.source).add(e.target);
-        tempAdj.get(e.target).add(e.source);
+        if (e.source !== e.target) {
+           tempAdj.get(e.target).add(e.source);
+        }
     });
 
     const getComponents = () => {
@@ -304,10 +318,9 @@ const runGirvanNewman = (graph, params) => {
 
     let numComponents = getComponents().length;
 
-    while(numComponents < targetCommunities && currentEdges.size > 0) {
+    while(numComponents < targetCommunities && graph.m > 0) {
         const betweenness = new Map();
-        currentEdges.forEach(e => betweenness.set(e, 0.0));
-
+        
         for (const node of graph.nodes) {
             const S = [];
             const P = new Map();
@@ -362,9 +375,9 @@ const runGirvanNewman = (graph, params) => {
         if (!edgeToRemove) break;
 
         const [u, v] = edgeToRemove.split('|');
-        currentEdges.delete(edgeToRemove);
         tempAdj.get(u).delete(v);
         tempAdj.get(v).delete(u);
+        graph.m--;
 
         numComponents = getComponents().length;
     }
