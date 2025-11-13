@@ -358,7 +358,7 @@ const ControlPanel: React.FC<ControlPanelProps> = (props) => {
               <button
                 onClick={onRun}
                 className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 px-4 rounded-md transition duration-300 flex items-center justify-center disabled:bg-cyan-800 disabled:cursor-not-allowed"
-                disabled={isLoading || props.customData.length === 0}
+                disabled={isLoading || props.graphData.nodes.length === 0}
               >
                 运行社区发现
               </button>
@@ -409,7 +409,7 @@ const ControlPanel: React.FC<ControlPanelProps> = (props) => {
               <button
                 onClick={() => onCalculateCentrality(selectedCentrality)}
                 className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-600 dark:hover:bg-gray-500 dark:text-white font-semibold py-2 px-4 rounded-md transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-                disabled={isLoading || isCalculatingCentrality || isCalculatingLinkPrediction || props.customData.length === 0}
+                disabled={isLoading || isCalculatingCentrality || isCalculatingLinkPrediction || props.graphData.nodes.length === 0}
               >
                 {isCalculatingCentrality && (
                   <svg className="animate-spin -ml-1 mr-3 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -466,7 +466,7 @@ const ControlPanel: React.FC<ControlPanelProps> = (props) => {
                <button
                 onClick={() => onCalculateLinkPrediction(selectedLinkPrediction)}
                 className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-600 dark:hover:bg-gray-500 dark:text-white font-semibold py-2 px-4 rounded-md transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-                disabled={isLoading || isCalculatingCentrality || isCalculatingLinkPrediction || props.customData.length === 0}
+                disabled={isLoading || isCalculatingCentrality || isCalculatingLinkPrediction || props.graphData.nodes.length === 0}
               >
                 {isCalculatingLinkPrediction && (
                   <svg className="animate-spin -ml-1 mr-3 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">

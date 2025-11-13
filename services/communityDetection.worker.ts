@@ -141,7 +141,7 @@ const runLabelPropagation = (graph: Graph): CommunityAssignment[] => {
     }));
 };
 
-// 2. Louvain Algorithm - REFACTORED to full 2-phase implementation
+// 2. Louvain Algorithm
 const runLouvain = (graph: Graph, params: LouvainParams): CommunityAssignment[] => {
     const { resolution } = params;
 
@@ -149,20 +149,16 @@ const runLouvain = (graph: Graph, params: LouvainParams): CommunityAssignment[] 
         return Array.from(graph.nodes).map((node, i) => ({ node, community: i }));
     }
 
-    // --- Helper Data Structures ---
-    // Represents the state of the graph partition at a given level
     class Partition {
         nodeToCommunity: Map<string, number>;
         communities: Map<number, Set<string>>;
-        sigma_tot: Map<number, number>; // Sum of degrees in a community
-        k_i_in: Map<string, Map<number, number>>; // Links from node i to community
-        m2: number; // 2 * m
+        sigma_tot: Map<number, number>;
+        m2: number;
 
         constructor(nodes: Set<string>, adj: Map<string, string[]>, degrees: Map<string, number>, m: number) {
             this.nodeToCommunity = new Map();
             this.communities = new Map();
             this.sigma_tot = new Map();
-            this.k_i_in = new Map();
             this.m2 = 2 * m;
 
             let communityId = 0;
@@ -170,36 +166,23 @@ const runLouvain = (graph: Graph, params: LouvainParams): CommunityAssignment[] 
                 this.nodeToCommunity.set(node, communityId);
                 this.communities.set(communityId, new Set([node]));
                 this.sigma_tot.set(communityId, degrees.get(node)!);
-                this.k_i_in.set(node, new Map());
                 communityId++;
-            }
-            
-            for(const node of nodes) {
-                const neighbors = adj.get(node)!;
-                for (const neighbor of neighbors) {
-                    const neighborComm = this.nodeToCommunity.get(neighbor)!;
-                    this.k_i_in.get(node)!.set(neighborComm, (this.k_i_in.get(node)!.get(neighborComm) || 0) + 1);
-                }
             }
         }
 
-        // Move a node to a new community and update data structures
         moveNode(node: string, newComm: number) {
             const oldComm = this.nodeToCommunity.get(node)!;
             const nodeDegree = graph.degrees.get(node)!;
 
-            // Update sigma_tot
             this.sigma_tot.set(oldComm, this.sigma_tot.get(oldComm)! - nodeDegree);
             this.sigma_tot.set(newComm, this.sigma_tot.get(newComm)! + nodeDegree);
             
-            // Update communities sets
             this.communities.get(oldComm)!.delete(node);
             if (this.communities.get(oldComm)!.size === 0) {
                 this.communities.delete(oldComm);
             }
             this.communities.get(newComm)!.add(node);
             
-            // Update nodeToCommunity map
             this.nodeToCommunity.set(node, newComm);
         }
     }
@@ -207,31 +190,47 @@ const runLouvain = (graph: Graph, params: LouvainParams): CommunityAssignment[] 
     // --- Phase 1: Modularity Optimization ---
     const optimizeModularity = (partition: Partition) => {
         let improvement = true;
-        while (improvement) {
+        let pass_count = 0;
+        while (improvement && pass_count < 100) { // Failsafe
+            pass_count++;
             improvement = false;
             const nodes = Array.from(graph.nodes).sort(); // For determinism
 
             for (const node of nodes) {
-                const currentNodeCommunity = partition.nodeToCommunity.get(node)!;
-                const neighbors = graph.adj.get(node)!;
                 const nodeDegree = graph.degrees.get(node)!;
-                let bestCommunity = currentNodeCommunity;
-                let maxDeltaQ = 0;
+                const neighbors = graph.adj.get(node)!;
+                const currentNodeCommunity = partition.nodeToCommunity.get(node)!;
 
+                // Calculate connections to neighbor communities
                 const neighborCommunities = new Map<number, number>(); // community -> weight
                 for(const neighbor of neighbors) {
                     const neighborComm = partition.nodeToCommunity.get(neighbor)!;
                     neighborCommunities.set(neighborComm, (neighborCommunities.get(neighborComm) || 0) + 1);
                 }
 
-                for (const [comm, k_i_in_val] of neighborCommunities.entries()) {
-                    // Modularity gain for moving node into community `comm`
-                    // Simplified formula: delta_Q = k_i,in - (sigma_tot * k_i) / (2m)
-                    const deltaQ = k_i_in_val - resolution * (partition.sigma_tot.get(comm)! * nodeDegree) / partition.m2;
+                const k_i_in_current = neighborCommunities.get(currentNodeCommunity) || 0;
+                const sigma_tot_current = partition.sigma_tot.get(currentNodeCommunity)!;
 
-                    if (deltaQ > maxDeltaQ) {
-                        maxDeltaQ = deltaQ;
-                        bestCommunity = comm;
+                let bestCommunity = currentNodeCommunity;
+                let maxGain = 0.0; // The gain of staying is 0. We only move if gain > 0.
+                
+                // Iterate over potential new communities (only neighbors' communities)
+                for (const [targetComm, k_i_in_target] of neighborCommunities.entries()) {
+                    if (targetComm === currentNodeCommunity) {
+                        continue;
+                    }
+
+                    const sigma_tot_target = partition.sigma_tot.get(targetComm)!;
+
+                    // This is the change in modularity if we move 'node' from its current comm to targetComm
+                    const gain_links = k_i_in_target - k_i_in_current;
+                    const gain_degrees = (resolution * nodeDegree / partition.m2) * ((sigma_tot_current - nodeDegree) - sigma_tot_target);
+                    
+                    const net_gain = gain_links + gain_degrees;
+
+                    if (net_gain > maxGain) {
+                        maxGain = net_gain;
+                        bestCommunity = targetComm;
                     }
                 }
                 
@@ -245,16 +244,9 @@ const runLouvain = (graph: Graph, params: LouvainParams): CommunityAssignment[] 
     
     // --- Phase 2: Community Aggregation ---
     const aggregateCommunities = (partition: Partition): GraphData => {
-        const newNodes: Set<string> = new Set();
+        const communityIds = Array.from(partition.communities.keys());
+        const newNodes = communityIds.map(id => ({ id: id.toString() } as AppNode));
         const newLinks: { source: string, target: string }[] = [];
-        const communityMap = new Map<number, string>();
-        let counter = 0;
-        for (const commId of partition.communities.keys()) {
-            const newId = counter.toString();
-            communityMap.set(commId, newId);
-            newNodes.add(newId);
-            counter++;
-        }
         
         const communityWeights = new Map<string, number>();
         for (const edge of graph.edges) {
@@ -262,8 +254,8 @@ const runLouvain = (graph: Graph, params: LouvainParams): CommunityAssignment[] 
             const comm2 = partition.nodeToCommunity.get(edge.target)!;
             
             if (comm1 !== comm2) {
-                const newComm1 = communityMap.get(comm1)!;
-                const newComm2 = communityMap.get(comm2)!;
+                const newComm1 = comm1.toString();
+                const newComm2 = comm2.toString();
                 const key = newComm1 < newComm2 ? `${newComm1}|${newComm2}` : `${newComm2}|${newComm1}`;
                 communityWeights.set(key, (communityWeights.get(key) || 0) + 1);
             }
@@ -276,7 +268,7 @@ const runLouvain = (graph: Graph, params: LouvainParams): CommunityAssignment[] 
              }
         }
         
-        return { nodes: Array.from(newNodes).map(id => ({ id } as AppNode)), links: newLinks };
+        return { nodes: newNodes, links: newLinks };
     };
     
     // --- Main Louvain Loop ---

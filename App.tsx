@@ -1,5 +1,4 @@
 
-
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import ControlPanel from './components/ControlPanel';
 import GraphVisualizer from './components/GraphVisualizer';
@@ -22,6 +21,88 @@ type SaveStatus = 'idle' | 'saving' | 'saved';
 
 const benchmarkNetworkInfo = BENCHMARK_NETWORKS.map(({ id, name }) => ({ id, name }));
 const SAVED_NETWORK_KEY = 'interactive_community_detection_saved_network';
+
+const parserWorkerCode = `
+const AppCentralityAlgorithm = {
+  IN_DEGREE: '入度中心性 (In-Degree)',
+  OUT_DEGREE: '出度中心性 (Out-Degree)',
+  CLOSENESS: '接近中心性 (Closeness)',
+  BETWEENNESS: '介数中心性 (Betweenness)',
+  PAGERANK: 'PageRank',
+};
+
+const parseEdgeList = (data) => {
+  const links = [];
+  const nodeSet = new Set();
+  const lines = data.trim().split('\\n');
+
+  lines.forEach(line => {
+    const parts = line.trim().split(/\\s+/);
+    if (parts.length >= 2) {
+      const [source, target] = parts;
+      if (source && target) {
+        links.push({ source, target });
+        nodeSet.add(source);
+        nodeSet.add(target);
+      }
+    }
+  });
+  
+  const nodes = Array.from(nodeSet).map(id => ({ id, attributes: {} }));
+  return { nodes, links };
+};
+
+const enrichNodesWithDegrees = (graphData, isDirected) => {
+    const inDegrees = new Map();
+    const outDegrees = new Map();
+
+    graphData.nodes.forEach(node => {
+        inDegrees.set(node.id, 0);
+        outDegrees.set(node.id, 0);
+    });
+
+    graphData.links.forEach(link => {
+        const sourceId = typeof link.source === 'object' && link.source !== null ? link.source.id : String(link.source);
+        const targetId = typeof link.target === 'object' && link.target !== null ? link.target.id : String(link.target);
+
+        if (outDegrees.has(sourceId)) {
+            outDegrees.set(sourceId, (outDegrees.get(sourceId) || 0) + 1);
+        }
+        if (inDegrees.has(targetId)) {
+            inDegrees.set(targetId, (inDegrees.get(targetId) || 0) + 1);
+        }
+    });
+
+    const updatedNodes = graphData.nodes.map(node => {
+        const inDegree = inDegrees.get(node.id) || 0;
+        const outDegree = outDegrees.get(node.id) || 0;
+        const totalDegree = isDirected ? inDegree + outDegree : outDegree;
+
+        return {
+            ...node,
+            attributes: {
+                ...node.attributes,
+                [AppCentralityAlgorithm.IN_DEGREE]: inDegree,
+                [AppCentralityAlgorithm.OUT_DEGREE]: outDegree,
+                '度 (总)': totalDegree
+            }
+        };
+    });
+
+    return { ...graphData, nodes: updatedNodes };
+};
+// Worker entry point
+self.onmessage = (event) => {
+    const { edgeList, isDirected } = event.data;
+    try {
+        const parsedData = parseEdgeList(edgeList);
+        const finalGraphData = enrichNodesWithDegrees(parsedData, isDirected);
+        self.postMessage({ type: 'SUCCESS', payload: finalGraphData });
+    } catch (error) {
+        self.postMessage({ type: 'ERROR', payload: error instanceof Error ? error.message : '解析数据时发生未知错误。' });
+    }
+};
+`;
 
 const EditingToolbar: React.FC<{
   activeTool: ActiveTool;
@@ -221,7 +302,10 @@ function App() {
             setGraphData({ nodes: [], links: [] });
             clearResults();
 
-            const worker = new Worker('./services/parser.worker.ts', { type: 'module' });
+            const blob = new Blob([parserWorkerCode], { type: 'application/javascript' });
+            const workerUrl = URL.createObjectURL(blob);
+            const worker = new Worker(workerUrl);
+            
             worker.onmessage = (event) => {
                 const { type, payload } = event.data;
                 if (type === 'SUCCESS') {
@@ -230,12 +314,14 @@ function App() {
                     setError(payload);
                 }
                 setIsParsing(false);
+                URL.revokeObjectURL(workerUrl);
                 worker.terminate();
             };
             worker.onerror = (error) => {
                 console.error("Parser worker error:", error);
-                setError("解析大型图数据时发生严重错误。");
+                setError(`解析 Worker 错误: ${error.message}`);
                 setIsParsing(false);
+                URL.revokeObjectURL(workerUrl);
                 worker.terminate();
             };
             worker.postMessage({ edgeList, isDirected });
@@ -283,7 +369,10 @@ function App() {
         setGraphData({ nodes: [], links: [] });
         clearResults();
 
-        const worker = new Worker('./services/parser.worker.ts', { type: 'module' });
+        const blob = new Blob([parserWorkerCode], { type: 'application/javascript' });
+        const workerUrl = URL.createObjectURL(blob);
+        const worker = new Worker(workerUrl);
+        
         worker.onmessage = (event) => {
             const { type, payload } = event.data;
             if (type === 'SUCCESS') {
@@ -292,12 +381,14 @@ function App() {
                 setError(payload);
             }
             setIsParsing(false);
+            URL.revokeObjectURL(workerUrl);
             worker.terminate();
         };
         worker.onerror = (error) => {
             console.error("Parser worker error:", error);
-            setError("解析大型图数据时发生严重错误。");
+            setError(`解析 Worker 错误: ${error.message}`);
             setIsParsing(false);
+            URL.revokeObjectURL(workerUrl);
             worker.terminate();
         };
         worker.postMessage({ edgeList, isDirected });
@@ -346,7 +437,9 @@ function App() {
         ...graphData,
         nodes: graphData.nodes.map(n => ({ ...n, community: undefined, isMisclassified: false }))
     };
-    setGraphData(initialGraphData);
+    // FIX: Removed premature state update that caused a race condition.
+    // The graph will now only be updated once the detection is complete.
+    // setGraphData(initialGraphData);
 
     try {
       let params = {};
